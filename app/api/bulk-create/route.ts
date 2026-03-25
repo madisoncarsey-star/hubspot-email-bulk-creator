@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildEmailPayload, buildPatchPayload } from "@/lib/payload";
+import { buildCreateSeedPayload, buildEmailPayload, buildPatchPayload } from "@/lib/payload";
 import { createDraftEmail, cloneDraftEmail, patchDraftEmail } from "@/lib/hubspot";
 import { envConfig, resolveToken } from "@/lib/config";
 import { parseMetadataCsv } from "@/lib/csv";
@@ -185,9 +185,23 @@ export async function POST(request: Request) {
       } else {
         const createResponse = await createDraftEmail({
           token,
-          payload
+          payload: buildCreateSeedPayload({
+            filename: file.filename,
+            htmlMarkup: inspection.bodyMarkup || file.content,
+            internalName,
+            subject,
+            previewText,
+            plainText,
+            defaults: bulkRequest.defaults
+          })
         });
         createdId = createResponse.id;
+
+        await patchDraftEmail({
+          token,
+          emailId: createdId,
+          payload: buildPatchPayload(payload)
+        });
       }
 
       results.push({

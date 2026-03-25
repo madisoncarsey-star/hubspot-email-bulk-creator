@@ -20,6 +20,16 @@ export async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error;
+      const retryable =
+        typeof error === "object" &&
+        error !== null &&
+        "retryable" in error &&
+        (error as { retryable?: boolean }).retryable === true;
+
+      if (!retryable) {
+        throw error;
+      }
+
       if (attempt === options.retries) break;
       const jitter = Math.floor(Math.random() * 120);
       const delay = Math.min(options.maxDelayMs, options.minDelayMs * 2 ** attempt) + jitter;

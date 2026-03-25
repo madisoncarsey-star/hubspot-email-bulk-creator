@@ -6,6 +6,17 @@ function maybeNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function buildFrom(defaults: HubSpotEmailPayloadInput["defaults"]) {
+  if (!defaults.fromName.trim() && !defaults.replyToEmail.trim()) {
+    return undefined;
+  }
+
+  return {
+    fromName: defaults.fromName || undefined,
+    replyTo: defaults.replyToEmail || undefined
+  };
+}
+
 function buildContent(htmlMarkup: string, previewText: string, plainText: string) {
   return {
     type: "EMAIL",
@@ -66,6 +77,8 @@ function buildContent(htmlMarkup: string, previewText: string, plainText: string
 }
 
 export function buildEmailPayload(input: HubSpotEmailPayloadInput) {
+  const from = buildFrom(input.defaults);
+
   return {
     name: input.internalName,
     subject: input.subject,
@@ -73,13 +86,24 @@ export function buildEmailPayload(input: HubSpotEmailPayloadInput) {
     isPublished: false,
     archived: false,
     sendOnPublish: false,
-    from: {
-      fromName: input.defaults.fromName || undefined,
-      replyTo: input.defaults.replyToEmail || undefined
-    },
-    folderId: maybeNumber(input.defaults.folderId),
+    from,
+    folderIdV2: maybeNumber(input.defaults.folderId),
     campaign: input.defaults.campaignId || undefined,
     content: buildContent(input.htmlMarkup, input.previewText, input.plainText)
+  };
+}
+
+export function buildCreateSeedPayload(input: HubSpotEmailPayloadInput) {
+  const from = buildFrom(input.defaults);
+
+  return {
+    name: input.internalName,
+    subject: input.subject,
+    language: input.defaults.language || "en",
+    templatePath: "@hubspot/email/dnd/plain_text.html",
+    from,
+    folderIdV2: maybeNumber(input.defaults.folderId),
+    campaign: input.defaults.campaignId || undefined
   };
 }
 
@@ -89,7 +113,7 @@ export function buildPatchPayload(payload: ReturnType<typeof buildEmailPayload>)
     subject: payload.subject,
     language: payload.language,
     from: payload.from,
-    folderId: payload.folderId,
+    folderIdV2: payload.folderIdV2,
     campaign: payload.campaign,
     sendOnPublish: false,
     content: payload.content

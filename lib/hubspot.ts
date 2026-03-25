@@ -4,6 +4,16 @@ import type { HubSpotEmailResponse } from "@/lib/types";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 
+class HubSpotApiError extends Error {
+  retryable: boolean;
+
+  constructor(message: string, retryable = false) {
+    super(message);
+    this.name = "HubSpotApiError";
+    this.retryable = retryable;
+  }
+}
+
 async function hubSpotFetch<T>({
   path,
   token,
@@ -54,16 +64,12 @@ async function hubSpotFetch<T>({
     }
 
     const isRetriable = response.status === 429 || response.status >= 500;
-    if (isRetriable) {
-      throw new Error(`Transient HubSpot error (${response.status}).`);
-    }
-
     const errorMessage =
       typeof parsedBody === "object" && parsedBody && "message" in parsedBody
         ? String((parsedBody as { message?: string }).message)
         : `HubSpot request failed with status ${response.status}.`;
 
-    throw new Error(errorMessage);
+    throw new HubSpotApiError(errorMessage, isRetriable);
   });
 }
 
