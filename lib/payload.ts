@@ -26,7 +26,7 @@ function buildContent(htmlMarkup: string, previewText: string, plainText: string
     flexAreas: {
       main: {
         boxed: false,
-        isSingleColumnFullWidth: true,
+        isSingleColumnFullWidth: false,
         sections: [
           {
             id: "section-main",
@@ -35,6 +35,21 @@ function buildContent(htmlMarkup: string, previewText: string, plainText: string
                 id: "column-main",
                 width: 12,
                 widgets: ["module-rich-text"]
+              }
+            ],
+            style: {
+              backgroundType: "CONTENT",
+              paddingTop: "24px",
+              paddingBottom: "24px"
+            }
+          },
+          {
+            id: "section-footer",
+            columns: [
+              {
+                id: "column-footer",
+                width: 12,
+                widgets: ["module-email-footer"]
               }
             ],
             style: {
@@ -67,6 +82,23 @@ function buildContent(htmlMarkup: string, previewText: string, plainText: string
           schema_version: 2,
           css_class: "dnd-module",
           html: htmlMarkup
+        },
+        styles: {},
+        css: {},
+        child_css: {}
+      },
+      "module-email-footer": {
+        type: "module",
+        id: "module-email-footer",
+        name: "module-email-footer",
+        order: 2,
+        module_id: 2869621,
+        body: {
+          align: "center",
+          css_class: "dnd-module",
+          path: "@hubspot/email_footer",
+          schema_version: 2,
+          unsubscribe_link_type: "both"
         },
         styles: {},
         css: {},
@@ -107,8 +139,15 @@ export function buildCreateSeedPayload(input: HubSpotEmailPayloadInput) {
   };
 }
 
-export function buildPatchPayload(payload: ReturnType<typeof buildEmailPayload>) {
+export function buildPatchPayload(
+  payload: ReturnType<typeof buildEmailPayload>,
+  options?: {
+    activeDomain?: string;
+    officeLocationId?: string;
+  }
+) {
   return {
+    activeDomain: options?.activeDomain,
     name: payload.name,
     subject: payload.subject,
     language: payload.language,
@@ -116,6 +155,11 @@ export function buildPatchPayload(payload: ReturnType<typeof buildEmailPayload>)
     folderIdV2: payload.folderIdV2,
     campaign: payload.campaign,
     sendOnPublish: false,
+    subscriptionDetails: options?.officeLocationId
+      ? {
+          officeLocationId: options.officeLocationId
+        }
+      : undefined,
     content: payload.content
   };
 }

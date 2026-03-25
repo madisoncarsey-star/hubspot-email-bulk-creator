@@ -75,6 +75,10 @@ export interface HubSpotEmailResponse {
   name?: string;
   subject?: string;
   state?: string;
+  activeDomain?: string;
+  subscriptionDetails?: {
+    officeLocationId?: string;
+  };
 }
 
 export interface RetryOptions {

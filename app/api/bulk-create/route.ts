@@ -180,7 +180,10 @@ export async function POST(request: Request) {
         await patchDraftEmail({
           token,
           emailId: createdId,
-          payload: buildPatchPayload(payload)
+          payload: buildPatchPayload(payload, {
+            activeDomain: cloneResponse.activeDomain,
+            officeLocationId: cloneResponse.subscriptionDetails?.officeLocationId
+          })
         });
       } else {
         const createResponse = await createDraftEmail({
@@ -200,7 +203,10 @@ export async function POST(request: Request) {
         await patchDraftEmail({
           token,
           emailId: createdId,
-          payload: buildPatchPayload(payload)
+          payload: buildPatchPayload(payload, {
+            activeDomain: createResponse.activeDomain,
+            officeLocationId: createResponse.subscriptionDetails?.officeLocationId
+          })
         });
       }
 
