@@ -1,6 +1,6 @@
 import type { HubSpotEmailPayloadInput } from "@/lib/types";
 
-function maybeNumber(value: string) {
+function maybeNumber(value?: string) {
   const normalized = value || "";
   if (!normalized.trim()) return undefined;
   const parsed = Number(normalized);
