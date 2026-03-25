@@ -1,19 +1,23 @@
 import type { HubSpotEmailPayloadInput } from "@/lib/types";
 
 function maybeNumber(value: string) {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value);
+  const normalized = value || "";
+  if (!normalized.trim()) return undefined;
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function buildFrom(defaults: HubSpotEmailPayloadInput["defaults"]) {
-  if (!defaults.fromName.trim() && !defaults.replyToEmail.trim()) {
+  const fromName = defaults.fromName || "";
+  const replyToEmail = defaults.replyToEmail || "";
+
+  if (!fromName.trim() && !replyToEmail.trim()) {
     return undefined;
   }
 
   return {
-    fromName: defaults.fromName || undefined,
-    replyTo: defaults.replyToEmail || undefined
+    fromName: fromName || undefined,
+    replyTo: replyToEmail || undefined
   };
 }
 

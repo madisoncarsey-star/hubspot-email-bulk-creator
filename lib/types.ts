@@ -16,12 +16,13 @@ export interface UploadFileRecord {
 }
 
 export interface HubSpotDefaults {
-  fromName: string;
-  replyToEmail: string;
-  folderId: string;
-  campaignId: string;
-  language: string;
-  baseEmailId: string;
+  uploadDirectory: string;
+  fromName?: string;
+  replyToEmail?: string;
+  folderId?: string;
+  campaignId?: string;
+  language?: string;
+  baseEmailId?: string;
 }
 
 export interface BulkCreateRequest {
@@ -49,30 +50,22 @@ export interface HubSpotEmailPayloadInput {
 
 export interface ApiResult {
   filename: string;
-  hubspotEmailId?: string;
-  internalName?: string;
-  subject?: string;
-  status: "validated" | "created" | "failed";
+  hubspotPath?: string;
+  status: "validated" | "uploaded" | "failed";
   warnings?: string[];
   errorMessage?: string;
 }
 
 export interface ValidationErrors {
   privateToken?: string;
-  fromName?: string;
-  replyToEmail?: string;
-  folderId?: string;
-  campaignId?: string;
-  language?: string;
-  baseEmailId?: string;
+  uploadDirectory?: string;
   settings?: string;
   htmlFiles?: string;
-  metadataCsv?: string;
 }
 
 export interface ResultSummary {
   total: number;
-  created: number;
+  uploaded: number;
   validated: number;
   failed: number;
 }
@@ -83,15 +76,11 @@ export interface ClientFilePreview {
   invalidExtension: boolean;
 }
 
-export interface HubSpotEmailResponse {
-  id: string;
+export interface HubSpotSourceCodeResponse {
+  path?: string;
+  extension?: string;
   name?: string;
-  subject?: string;
-  state?: string;
-  activeDomain?: string;
-  subscriptionDetails?: {
-    officeLocationId?: string;
-  };
+  folder?: boolean;
 }
 
 export interface RetryOptions {

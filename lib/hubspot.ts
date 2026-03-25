@@ -1,8 +1,9 @@
 import { logHubSpotExchange } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
-import type { HubSpotEmailResponse } from "@/lib/types";
+import type { HubSpotSourceCodeResponse } from "@/lib/types";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
+const SOURCE_CODE_ENVIRONMENT = "draft";
 
 class HubSpotApiError extends Error {
   retryable: boolean;
@@ -14,43 +15,59 @@ class HubSpotApiError extends Error {
   }
 }
 
-async function hubSpotFetch<T>({
+function encodeHubSpotPath(path: string) {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+async function parseResponse(response: Response) {
+  const responseText = await response.text();
+
+  try {
+    return responseText ? JSON.parse(responseText) : {};
+  } catch {
+    return responseText;
+  }
+}
+
+async function hubSpotMultipartFetch<T>({
   path,
   token,
   method,
-  body
+  filePath,
+  fileContents
 }: {
   path: string;
   token: string;
-  method: "POST" | "PATCH";
-  body: unknown;
+  method: "POST" | "PUT";
+  filePath: string;
+  fileContents: string;
 }): Promise<T> {
   return withRetry(async () => {
+    const formData = new FormData();
+    formData.append("file", new Blob([fileContents], { type: "text/html" }), filePath.split("/").pop() || "upload.html");
+
     logHubSpotExchange("request", {
       method,
       path,
       authorization: `Bearer ${token}`,
-      body
+      filePath,
+      fileSize: fileContents.length
     });
 
     const response = await fetch(`${HUBSPOT_BASE_URL}${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify(body),
+      body: formData,
       cache: "no-store"
     });
 
-    const responseText = await response.text();
-    let parsedBody: unknown = responseText;
-
-    try {
-      parsedBody = responseText ? JSON.parse(responseText) : {};
-    } catch {
-      parsedBody = responseText;
-    }
+    const parsedBody = await parseResponse(response);
 
     logHubSpotExchange("response", {
       method,
@@ -73,57 +90,38 @@ async function hubSpotFetch<T>({
   });
 }
 
-export async function createDraftEmail({
+export async function validateSourceCodeFile({
   token,
-  payload
+  hubspotPath,
+  fileContents
 }: {
   token: string;
-  payload: unknown;
+  hubspotPath: string;
+  fileContents: string;
 }) {
-  return hubSpotFetch<HubSpotEmailResponse>({
-    path: "/marketing/v3/emails/",
+  return hubSpotMultipartFetch<HubSpotSourceCodeResponse>({
+    path: `/cms/v3/source-code/${SOURCE_CODE_ENVIRONMENT}/validate/${encodeHubSpotPath(hubspotPath)}`,
     token,
     method: "POST",
-    body: payload
+    filePath: hubspotPath,
+    fileContents
   });
 }
 
-export async function cloneDraftEmail({
+export async function uploadSourceCodeFile({
   token,
-  baseEmailId,
-  cloneName,
-  language
+  hubspotPath,
+  fileContents
 }: {
   token: string;
-  baseEmailId: string;
-  cloneName: string;
-  language: string;
+  hubspotPath: string;
+  fileContents: string;
 }) {
-  return hubSpotFetch<HubSpotEmailResponse>({
-    path: "/marketing/v3/emails/clone",
+  return hubSpotMultipartFetch<HubSpotSourceCodeResponse>({
+    path: `/cms/v3/source-code/${SOURCE_CODE_ENVIRONMENT}/content/${encodeHubSpotPath(hubspotPath)}`,
     token,
-    method: "POST",
-    body: {
-      id: baseEmailId,
-      cloneName,
-      language
-    }
-  });
-}
-
-export async function patchDraftEmail({
-  token,
-  emailId,
-  payload
-}: {
-  token: string;
-  emailId: string;
-  payload: unknown;
-}) {
-  return hubSpotFetch<HubSpotEmailResponse>({
-    path: `/marketing/v3/emails/${emailId}/draft`,
-    token,
-    method: "PATCH",
-    body: payload
+    method: "PUT",
+    filePath: hubspotPath,
+    fileContents
   });
 }

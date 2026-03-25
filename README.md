@@ -1,6 +1,6 @@
-# HubSpot Email Bulk Creator
+# HubSpot HTML Bulk Uploader
 
-Internal web app for safely bulk-creating HubSpot marketing email drafts from uploaded HTML files.
+Internal web app for safely uploading HTML files into HubSpot Design Manager as draft source-code files.
 
 ## Why this stack
 
@@ -17,48 +17,37 @@ This implementation uses `Next.js + TypeScript` so the UI, server routes, valida
 - `components/`
   Client-side upload flow and results UI.
 - `lib/`
-  Shared domain logic for CSV parsing, HTML inspection, payload building, HubSpot API access, retry logic, and safe logging.
+  Shared domain logic for HTML inspection, HubSpot API access, retry logic, and safe logging.
 - `samples/`
   Example HTML and CSV for testing the workflow.
 - `tests/`
-  Unit tests for CSV parsing, HTML body extraction, plain text generation, and HubSpot payload building.
+  Utility tests from earlier phases plus HTML extraction coverage.
 
 ## Key behaviors
 
 - Upload multiple `.html` files.
-- Optionally upload a CSV with:
-  - `filename`
-  - `subject`
-  - `preview_text`
-  - `internal_name`
 - Dry run validation mode checks:
   - file extensions
   - HTML structure heuristics
-  - body extraction
-  - payload readiness
-- Create mode:
-  - creates draft HubSpot marketing emails only
-  - never calls publish endpoints
-  - supports test mode for first 1 or 2 emails
+  - malformed markup warnings
+- Upload mode:
+  - validates each file against HubSpot's CMS source code validator
+  - uploads each file into HubSpot's draft source code environment
+  - supports test mode for first 1 or 2 files
   - supports full batch mode
-  - reads the HubSpot private app token from server environment variables instead of a browser form field
-- Optional advanced clone mode:
-  - if `baseEmailId` is provided, the app clones the base email with `POST /marketing/v3/emails/clone`
-  - then patches the cloned draft with `PATCH /marketing/v3/emails/{emailId}/draft`
-- Generates plain text fallbacks from HTML.
+  - reads the HubSpot private app token from server environment variables
 - Redacts tokens in request/response logs.
 - Retries transient HubSpot failures and rate limits with exponential backoff.
 - Exports result rows as CSV from the browser.
 
 ## HubSpot API notes
 
-This project is built around the HubSpot Marketing Emails v3 API. As of March 25, 2026, the relevant official docs are:
+This phase is built around HubSpot's CMS Source Code API. As of March 25, 2026, the relevant official docs are:
 
-- Create marketing email: [developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/post-marketing-v3-emails-](https://developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/post-marketing-v3-emails-)
-- Clone marketing email: [developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/post-marketing-v3-emails-clone](https://developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/post-marketing-v3-emails-clone)
-- Patch draft version: [developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/patch-marketing-v3-emails-emailId-draft](https://developers.hubspot.com/docs/api-reference/marketing-marketing-emails-v3/marketing-emails/patch-marketing-v3-emails-emailId-draft)
+- CMS Source Code API guide: [developers.hubspot.com/docs/api-reference/cms-source-code-v3/guide](https://developers.hubspot.com/docs/api-reference/cms-source-code-v3/guide)
+- Email template markup: [developers.hubspot.com/docs/cms/start-building/building-blocks/templates/email-template-markup](https://developers.hubspot.com/docs/cms/start-building/building-blocks/templates/email-template-markup)
 
-The app intentionally uses only create, clone, and draft patch operations. It does not publish or send emails.
+The app uploads files into HubSpot's `draft` source-code environment only. It does not publish files or create marketing email drafts in this phase.
 
 ## Environment variables
 
@@ -71,11 +60,6 @@ cp .env.example .env.local
 Available settings:
 
 - `HUBSPOT_PRIVATE_APP_TOKEN`
-- `DEFAULT_FROM_NAME`
-- `DEFAULT_REPLY_TO_EMAIL`
-- `DEFAULT_FOLDER_ID`
-- `DEFAULT_CAMPAIGN_ID`
-- `DEFAULT_LANGUAGE`
 
 ## Local development
 
@@ -121,11 +105,6 @@ Before the first production deploy, add these in Netlify:
 2. Go to **Site configuration** > **Environment variables**.
 3. Add:
    - `HUBSPOT_PRIVATE_APP_TOKEN`
-   - `DEFAULT_FROM_NAME`
-   - `DEFAULT_REPLY_TO_EMAIL`
-   - `DEFAULT_FOLDER_ID`
-   - `DEFAULT_CAMPAIGN_ID`
-   - `DEFAULT_LANGUAGE`
 
 If you already have a local `.env.local`, Netlify also supports importing variables from a `.env` file in the UI.
 
@@ -134,7 +113,7 @@ If you already have a local `.env.local`, Netlify also supports importing variab
 1. Click **Deploy site**.
 2. Wait for the build to finish.
 3. Open the deployed URL.
-4. Start with a dry run using the sample files.
+4. Start with a dry run using the sample HTML file.
 
 ### Updating later
 
@@ -153,11 +132,11 @@ npm test
 ## Suggested workflow
 
 1. Start in dry run mode.
-2. Upload a small sample batch and optional CSV.
+2. Upload a small sample batch.
 3. Review validation warnings.
-4. Switch to `First 1` or `First 2` in create mode.
-5. Confirm the resulting drafts in HubSpot.
-6. Run the full batch once you are comfortable with the mapping.
+4. Switch to `First 1` or `First 2` in upload mode.
+5. Confirm the uploaded files in HubSpot Design Manager.
+6. Run the full batch once you are comfortable with the folder path.
 
 ## Security choices
 
@@ -166,7 +145,7 @@ npm test
 - The HubSpot token is expected to come from environment variables rather than browser input.
 - Logs redact bearer tokens before writing to the console.
 - Filenames are sanitized before processing.
-- Uploaded content is treated as data for HubSpot payload creation, not executed locally.
+- Uploaded content is treated as file data for HubSpot source code upload, not executed locally.
 
 ## Verification note
 

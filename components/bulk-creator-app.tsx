@@ -12,12 +12,7 @@ import type {
 } from "@/lib/types";
 
 const INITIAL_DEFAULTS: HubSpotDefaults = {
-  fromName: "",
-  replyToEmail: "",
-  folderId: "",
-  campaignId: "",
-  language: "en",
-  baseEmailId: ""
+  uploadDirectory: "marketing-email-uploads"
 };
 
 const MAX_TEST_FILE_COUNT = 2;
@@ -32,37 +27,29 @@ function summarizeResults(results: ApiResult[]): ResultSummary {
   return results.reduce(
     (summary, result) => {
       summary.total += 1;
-      if (result.status === "created") summary.created += 1;
+      if (result.status === "uploaded") summary.uploaded += 1;
       if (result.status === "validated") summary.validated += 1;
       if (result.status === "failed") summary.failed += 1;
       return summary;
     },
-    { total: 0, created: 0, validated: 0, failed: 0 }
+    { total: 0, uploaded: 0, validated: 0, failed: 0 }
   );
 }
 
 function resultsToCsv(results: ApiResult[]) {
-  const rows = [
-    ["filename", "hubspot_email_id", "internal_name", "subject", "status", "error_message"]
-  ];
+  const rows = [["filename", "hubspot_path", "status", "error_message"]];
 
   for (const result of results) {
     rows.push([
       result.filename,
-      result.hubspotEmailId ?? "",
-      result.internalName ?? "",
-      result.subject ?? "",
+      result.hubspotPath ?? "",
       result.status,
       result.errorMessage ?? ""
     ]);
   }
 
   return rows
-    .map((row) =>
-      row
-        .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
-        .join(",")
-    )
+    .map((row) => row.map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`).join(","))
     .join("\n");
 }
 
@@ -78,7 +65,6 @@ function downloadCsv(filename: string, contents: string) {
 
 export function BulkCreatorApp() {
   const [htmlFiles, setHtmlFiles] = useState<File[]>([]);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [defaults, setDefaults] = useState<HubSpotDefaults>(INITIAL_DEFAULTS);
   const [runMode, setRunMode] = useState<RunMode>("test-2");
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("dry-run");
@@ -104,11 +90,12 @@ export function BulkCreatorApp() {
       ? isSubmitting
         ? 20
         : 0
-      : Math.round(((summary.created + summary.validated + summary.failed) / summary.total) * 100);
+      : Math.round(((summary.uploaded + summary.validated + summary.failed) / summary.total) * 100);
 
   async function submit() {
     if (htmlFiles.length === 0) {
       setServerMessage("Upload at least one HTML file before continuing.");
+      setValidationErrors({ htmlFiles: "Upload at least one .html file." });
       return;
     }
 
@@ -116,21 +103,13 @@ export function BulkCreatorApp() {
     setServerMessage(null);
     setValidationErrors({});
     setResults([]);
-    setProgressMessage(executionMode === "dry-run" ? "Validating files..." : "Creating draft emails...");
+    setProgressMessage(executionMode === "dry-run" ? "Validating files..." : "Uploading files to HubSpot...");
 
     const formData = new FormData();
-
     htmlFiles.forEach((file) => formData.append("htmlFiles", file));
-    if (csvFile) formData.append("metadataCsv", csvFile);
-
     formData.append("runMode", runMode);
     formData.append("executionMode", executionMode);
-    formData.append("fromName", defaults.fromName);
-    formData.append("replyToEmail", defaults.replyToEmail);
-    formData.append("folderId", defaults.folderId);
-    formData.append("campaignId", defaults.campaignId);
-    formData.append("language", defaults.language || "en");
-    formData.append("baseEmailId", defaults.baseEmailId);
+    formData.append("uploadDirectory", defaults.uploadDirectory);
 
     try {
       const response = await fetch("/api/bulk-create", {
@@ -153,7 +132,7 @@ export function BulkCreatorApp() {
 
       setResults(payload.results ?? []);
       setServerMessage(payload.message ?? null);
-      setProgressMessage(executionMode === "dry-run" ? "Validation complete." : "Draft creation complete.");
+      setProgressMessage(executionMode === "dry-run" ? "Validation complete." : "Upload complete.");
     } catch (error) {
       setServerMessage(error instanceof Error ? error.message : "Unexpected request failure.");
       setProgressMessage("Run failed.");
@@ -166,25 +145,24 @@ export function BulkCreatorApp() {
     <main className="page-shell">
       <section className="hero">
         <div className="hero-card">
-          <span className="hero-kicker">Internal marketing operations</span>
-          <h1>HubSpot Email Bulk Creator</h1>
+          <span className="hero-kicker">Phase 1: HubSpot file upload</span>
+          <h1>HubSpot HTML Bulk Uploader</h1>
           <p>
-            Upload a batch of HTML files, optionally map metadata from a CSV, validate everything safely,
-            and create draft HubSpot marketing emails without ever publishing them.
+            Upload raw HTML files into HubSpot Design Manager as draft source-code files. This phase skips drag-and-drop emails entirely and preserves your original markup.
           </p>
         </div>
         <aside className="hero-card hero-aside">
           <div className="stat">
-            <strong>Dry run first</strong>
-            Safe validation mode checks filenames, metadata, HTML structure, and payload readiness without calling HubSpot.
+            <strong>Draft source code only</strong>
+            Files are uploaded to HubSpot&apos;s draft CMS source code environment, not published live.
           </div>
           <div className="stat">
-            <strong>Drafts only</strong>
-            The server only uses draft creation and draft patch endpoints. No publish action exists in this UI or backend.
+            <strong>Validation first</strong>
+            Dry run checks the files locally. Upload mode also asks HubSpot to validate each HTML file before saving it.
           </div>
           <div className="stat">
             <strong>Server-side token only</strong>
-            HubSpot access is expected to come from a secure environment variable. Logs still redact secrets automatically.
+            HubSpot access comes from the secure <code className="inline">HUBSPOT_PRIVATE_APP_TOKEN</code> environment variable.
           </div>
         </aside>
       </section>
@@ -194,7 +172,7 @@ export function BulkCreatorApp() {
           <div className="panel stack">
             <div>
               <h2>1. Upload files</h2>
-              <p>Choose one or more <code className="inline">.html</code> files and an optional metadata CSV.</p>
+              <p>Choose one or more <code className="inline">.html</code> files to upload into HubSpot.</p>
             </div>
 
             <div className="dropzone">
@@ -209,17 +187,7 @@ export function BulkCreatorApp() {
               </label>
             </div>
 
-            <div className="dropzone">
-              <label className="field">
-                <span>Metadata CSV</span>
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-                />
-                <small>Optional columns: <code className="inline">filename</code>, <code className="inline">subject</code>, <code className="inline">preview_text</code>, <code className="inline">internal_name</code>.</small>
-              </label>
-            </div>
+            {validationErrors.htmlFiles ? <div className="status-banner error">{validationErrors.htmlFiles}</div> : null}
 
             <div className="file-list">
               {filePreviews.length === 0 ? (
@@ -241,85 +209,31 @@ export function BulkCreatorApp() {
           <div className="panel stack">
             <div>
               <h2>2. Settings</h2>
-              <p>Configure token and draft defaults. Leave optional fields blank if your base email or account defaults already cover them.</p>
+              <p>Choose the HubSpot folder path where uploaded files should land inside Design Manager.</p>
             </div>
 
-            {validationErrors.settings ? (
-              <div className="status-banner error">{validationErrors.settings}</div>
-            ) : null}
+            {validationErrors.settings ? <div className="status-banner error">{validationErrors.settings}</div> : null}
 
             <div className="note">
-              Best design fidelity usually comes from inline styles plus a base email in clone mode. HubSpot may sanitize advanced CSS or head-level styling in standard create mode.
+              Example folder path: <code className="inline">marketing-email-uploads</code> or <code className="inline">marketing/email-templates/spring</code>.
             </div>
 
             <div className="note">
-              This app now reads the HubSpot token from the server environment only. In Netlify, set <code className="inline">HUBSPOT_PRIVATE_APP_TOKEN</code> once and leave it out of the UI.
+              If upload mode says a token is missing, set <code className="inline">HUBSPOT_PRIVATE_APP_TOKEN</code> in Netlify and redeploy.
             </div>
-
-            <div className="field-grid">
-              <label className="field">
-                <span>Language</span>
-                <input
-                  value={defaults.language}
-                  onChange={(event) => setDefaults((current) => ({ ...current, language: event.target.value }))}
-                  placeholder="en"
-                />
-                {validationErrors.language ? <div className="status-banner error">{validationErrors.language}</div> : null}
-              </label>
-
-              <label className="field">
-                <span>From name</span>
-                <input
-                  value={defaults.fromName}
-                  onChange={(event) => setDefaults((current) => ({ ...current, fromName: event.target.value }))}
-                  placeholder="Marketing Team"
-                />
-                {validationErrors.fromName ? <div className="status-banner error">{validationErrors.fromName}</div> : null}
-              </label>
-
-              <label className="field">
-                <span>Reply-to email</span>
-                <input
-                  value={defaults.replyToEmail}
-                  onChange={(event) => setDefaults((current) => ({ ...current, replyToEmail: event.target.value }))}
-                  placeholder="marketing@example.com"
-                />
-                {validationErrors.replyToEmail ? <div className="status-banner error">{validationErrors.replyToEmail}</div> : null}
-              </label>
-
-              <label className="field">
-                <span>Folder ID</span>
-                <input
-                  value={defaults.folderId}
-                  onChange={(event) => setDefaults((current) => ({ ...current, folderId: event.target.value }))}
-                  placeholder="12345"
-                />
-                {validationErrors.folderId ? <div className="status-banner error">{validationErrors.folderId}</div> : null}
-              </label>
-
-              <label className="field">
-                <span>Campaign ID</span>
-                <input
-                  value={defaults.campaignId}
-                  onChange={(event) => setDefaults((current) => ({ ...current, campaignId: event.target.value }))}
-                  placeholder="campaign-guid"
-                />
-                {validationErrors.campaignId ? <div className="status-banner error">{validationErrors.campaignId}</div> : null}
-              </label>
-            </div>
-
-            {validationErrors.privateToken ? <div className="status-banner error">{validationErrors.privateToken}</div> : null}
 
             <label className="field">
-              <span>Base email clone mode</span>
+              <span>HubSpot upload folder</span>
               <input
-                value={defaults.baseEmailId}
-                onChange={(event) => setDefaults((current) => ({ ...current, baseEmailId: event.target.value }))}
-                placeholder="Optional existing HubSpot email ID"
+                value={defaults.uploadDirectory}
+                onChange={(event) => setDefaults((current) => ({ ...current, uploadDirectory: event.target.value }))}
+                placeholder="marketing-email-uploads"
               />
-              <small>If provided, the app clones that draft/template first and then patches the cloned draft content.</small>
-              {validationErrors.baseEmailId ? <div className="status-banner error">{validationErrors.baseEmailId}</div> : null}
+              <small>The app saves files into HubSpot draft source code under this folder.</small>
+              {validationErrors.uploadDirectory ? <div className="status-banner error">{validationErrors.uploadDirectory}</div> : null}
             </label>
+
+            {validationErrors.privateToken ? <div className="status-banner error">{validationErrors.privateToken}</div> : null}
           </div>
         </div>
 
@@ -327,7 +241,7 @@ export function BulkCreatorApp() {
           <div className="panel stack">
             <div>
               <h2>3. Run mode</h2>
-              <p>Choose how many files to process and whether this pass should validate only or create drafts.</p>
+              <p>Use dry run to sanity-check files, then upload the first 1 or 2 before running the full batch.</p>
             </div>
 
             <div className="field">
@@ -352,30 +266,34 @@ export function BulkCreatorApp() {
                   Dry run
                 </button>
                 <button className={executionMode === "create" ? "active" : ""} type="button" onClick={() => setExecutionMode("create")}>
-                  Create drafts
+                  Upload files
                 </button>
-                <button className={executionMode === "create" && runMode === "all" ? "active" : ""} type="button" onClick={() => {
-                  setExecutionMode("create");
-                  setRunMode("all");
-                }}>
+                <button
+                  className={executionMode === "create" && runMode === "all" ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    setExecutionMode("create");
+                    setRunMode("all");
+                  }}
+                >
                   Full batch
                 </button>
               </div>
             </div>
 
             <div className="note">
-              Test mode processes at most {MAX_TEST_FILE_COUNT} files. Dry run mode never calls HubSpot.
+              Test mode processes at most {MAX_TEST_FILE_COUNT} files. Dry run never calls HubSpot. Upload mode validates each file with HubSpot before saving it.
             </div>
 
             <div className="action-row">
               <button className="button" type="button" disabled={isSubmitting} onClick={submit}>
-                {isSubmitting ? "Working..." : executionMode === "dry-run" ? "Validate batch" : "Create drafts"}
+                {isSubmitting ? "Working..." : executionMode === "dry-run" ? "Validate batch" : "Upload to HubSpot"}
               </button>
               <button
                 className="ghost-button"
                 type="button"
                 disabled={results.length === 0}
-                onClick={() => downloadCsv("hubspot-email-results.csv", resultsToCsv(results))}
+                onClick={() => downloadCsv("hubspot-html-upload-results.csv", resultsToCsv(results))}
               >
                 Download results CSV
               </button>
@@ -401,7 +319,7 @@ export function BulkCreatorApp() {
           <div className="panel stack">
             <div>
               <h2>4. Results</h2>
-              <p>Every file returns a row, including failures and dry-run validation warnings.</p>
+              <p>Each row shows the HubSpot draft path that was validated or uploaded.</p>
             </div>
 
             <div className="summary-grid">
@@ -410,7 +328,7 @@ export function BulkCreatorApp() {
                 Total processed
               </div>
               <div className="summary-card">
-                <strong>{summary.created + summary.validated}</strong>
+                <strong>{summary.uploaded + summary.validated}</strong>
                 Successes
               </div>
               <div className="summary-card">
@@ -421,20 +339,16 @@ export function BulkCreatorApp() {
 
             <div className="result-list">
               {results.length === 0 ? (
-                <div className="note">Results will appear here after validation or draft creation.</div>
+                <div className="note">Results will appear here after validation or upload.</div>
               ) : (
                 results.map((result) => (
-                  <div className="result-card" key={`${result.filename}-${result.hubspotEmailId ?? result.status}`}>
+                  <div className="result-card" key={`${result.filename}-${result.hubspotPath ?? result.status}`}>
                     <strong>{result.filename}</strong>
                     <div className="meta-row">
-                      <span className={`pill ${result.status === "failed" ? "error" : result.status === "created" ? "success" : "warning"}`}>
+                      <span className={`pill ${result.status === "failed" ? "error" : result.status === "uploaded" ? "success" : "warning"}`}>
                         {result.status}
                       </span>
-                      {result.hubspotEmailId ? <span>Email ID: {result.hubspotEmailId}</span> : null}
-                      {result.internalName ? <span>Internal name: {result.internalName}</span> : null}
-                    </div>
-                    <div className="meta-row">
-                      <span>Subject: {result.subject || "None provided"}</span>
+                      {result.hubspotPath ? <span>HubSpot path: {result.hubspotPath}</span> : null}
                     </div>
                     {result.warnings?.length ? (
                       <div className="warning-list">

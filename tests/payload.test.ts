@@ -11,6 +11,7 @@ describe("buildEmailPayload", () => {
       previewText: "Preview text",
       plainText: "Hello team",
       defaults: {
+        uploadDirectory: "marketing-email-uploads",
         fromName: "Marketing",
         replyToEmail: "marketing@example.com",
         folderId: "123",
@@ -22,7 +23,7 @@ describe("buildEmailPayload", () => {
 
     expect(payload.isPublished).toBe(false);
     expect(payload.sendOnPublish).toBe(false);
-    expect(payload.folderId).toBe(123);
+    expect(payload.folderIdV2).toBe(123);
     expect(payload.content.widgets["module-rich-text"].body.html).toContain("Hello team");
     expect(payload.content.plainTextVersion).toBe("Hello team");
   });
