@@ -57,6 +57,19 @@ export interface ApiResult {
   errorMessage?: string;
 }
 
+export interface ValidationErrors {
+  privateToken?: string;
+  fromName?: string;
+  replyToEmail?: string;
+  folderId?: string;
+  campaignId?: string;
+  language?: string;
+  baseEmailId?: string;
+  settings?: string;
+  htmlFiles?: string;
+  metadataCsv?: string;
+}
+
 export interface ResultSummary {
   total: number;
   created: number;

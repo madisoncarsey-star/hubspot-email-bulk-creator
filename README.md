@@ -41,6 +41,7 @@ This implementation uses `Next.js + TypeScript` so the UI, server routes, valida
   - never calls publish endpoints
   - supports test mode for first 1 or 2 emails
   - supports full batch mode
+  - reads the HubSpot private app token from server environment variables instead of a browser form field
 - Optional advanced clone mode:
   - if `baseEmailId` is provided, the app clones the base email with `POST /marketing/v3/emails/clone`
   - then patches the cloned draft with `PATCH /marketing/v3/emails/{emailId}/draft`
@@ -162,7 +163,7 @@ npm test
 
 - No database is used.
 - Tokens are not persisted server-side.
-- Tokens can come from the request form or environment variables.
+- The HubSpot token is expected to come from environment variables rather than browser input.
 - Logs redact bearer tokens before writing to the console.
 - Filenames are sanitized before processing.
 - Uploaded content is treated as data for HubSpot payload creation, not executed locally.

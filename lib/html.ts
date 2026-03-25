@@ -15,6 +15,15 @@ function stripScriptsAndStyles(html: string) {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
 }
 
+function stripScriptsOnly(html: string) {
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+}
+
+function extractHeadStyles(html: string) {
+  const styleBlocks = Array.from(html.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi)).map((match) => match[0].trim());
+  return styleBlocks.join("\n");
+}
+
 function decodeEntities(text: string) {
   return text.replace(/&(#?[\w\d]+);/g, (_, entity) => {
     if (entity.startsWith("#x")) {
@@ -35,20 +44,24 @@ export function sanitizeFilename(filename: string) {
 }
 
 export function extractBodyContent(html: string) {
-  const cleaned = stripScriptsAndStyles(html).trim();
+  const withoutScripts = stripScriptsOnly(html).trim();
+  const headStyles = extractHeadStyles(withoutScripts);
+  const cleaned = withoutScripts.trim();
   const bodyMatch = cleaned.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
   if (bodyMatch?.[1]?.trim()) {
-    return bodyMatch[1].trim();
+    return [headStyles, bodyMatch[1].trim()].filter(Boolean).join("\n");
   }
 
   const htmlMatch = cleaned.match(/<html\b[^>]*>([\s\S]*?)<\/html>/i);
   if (htmlMatch?.[1]?.trim()) {
-    return htmlMatch[1]
+    const htmlWithoutHead = htmlMatch[1]
       .replace(/<head\b[^>]*>[\s\S]*?<\/head>/i, "")
       .trim();
+
+    return [headStyles, htmlWithoutHead].filter(Boolean).join("\n");
   }
 
-  return cleaned;
+  return [headStyles, cleaned].filter(Boolean).join("\n");
 }
 
 export function generatePlainText(html: string) {
@@ -89,6 +102,10 @@ export function inspectHtml(html: string): HtmlInspection {
 
   if (/<body/i.test(trimmed) && bodyMarkup === trimmed) {
     warnings.push("Body extraction fell back to the original file; body tag may be malformed.");
+  }
+
+  if (/<style\b/i.test(trimmed)) {
+    warnings.push("Head CSS was preserved where possible, but HubSpot may still sanitize some advanced email styling.");
   }
 
   const titleMatch = trimmed.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);

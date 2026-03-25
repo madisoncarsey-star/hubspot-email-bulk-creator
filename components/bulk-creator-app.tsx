@@ -7,7 +7,8 @@ import type {
   ExecutionMode,
   HubSpotDefaults,
   ResultSummary,
-  RunMode
+  RunMode,
+  ValidationErrors
 } from "@/lib/types";
 
 const INITIAL_DEFAULTS: HubSpotDefaults = {
@@ -78,7 +79,6 @@ function downloadCsv(filename: string, contents: string) {
 export function BulkCreatorApp() {
   const [htmlFiles, setHtmlFiles] = useState<File[]>([]);
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [privateToken, setPrivateToken] = useState("");
   const [defaults, setDefaults] = useState<HubSpotDefaults>(INITIAL_DEFAULTS);
   const [runMode, setRunMode] = useState<RunMode>("test-2");
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("dry-run");
@@ -86,6 +86,7 @@ export function BulkCreatorApp() {
   const [progressMessage, setProgressMessage] = useState("");
   const [results, setResults] = useState<ApiResult[]>([]);
   const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
 
   const filePreviews = useMemo<ClientFilePreview[]>(
     () =>
@@ -113,6 +114,7 @@ export function BulkCreatorApp() {
 
     setIsSubmitting(true);
     setServerMessage(null);
+    setValidationErrors({});
     setResults([]);
     setProgressMessage(executionMode === "dry-run" ? "Validating files..." : "Creating draft emails...");
 
@@ -121,7 +123,6 @@ export function BulkCreatorApp() {
     htmlFiles.forEach((file) => formData.append("htmlFiles", file));
     if (csvFile) formData.append("metadataCsv", csvFile);
 
-    formData.append("privateToken", privateToken);
     formData.append("runMode", runMode);
     formData.append("executionMode", executionMode);
     formData.append("fromName", defaults.fromName);
@@ -140,9 +141,13 @@ export function BulkCreatorApp() {
       const payload = (await response.json()) as {
         message?: string;
         results?: ApiResult[];
+        validationErrors?: ValidationErrors;
       };
 
       if (!response.ok) {
+        if (payload.validationErrors) {
+          setValidationErrors(payload.validationErrors);
+        }
         throw new Error(payload.message || "Request failed.");
       }
 
@@ -178,8 +183,8 @@ export function BulkCreatorApp() {
             The server only uses draft creation and draft patch endpoints. No publish action exists in this UI or backend.
           </div>
           <div className="stat">
-            <strong>Token stays ephemeral</strong>
-            Tokens are read from the form or environment and used in memory only. Logs redact secrets automatically.
+            <strong>Server-side token only</strong>
+            HubSpot access is expected to come from a secure environment variable. Logs still redact secrets automatically.
           </div>
         </aside>
       </section>
@@ -239,18 +244,19 @@ export function BulkCreatorApp() {
               <p>Configure token and draft defaults. Leave optional fields blank if your base email or account defaults already cover them.</p>
             </div>
 
-            <div className="field-grid">
-              <label className="field">
-                <span>HubSpot private app token</span>
-                <input
-                  type="password"
-                  placeholder="pat-..."
-                  value={privateToken}
-                  onChange={(event) => setPrivateToken(event.target.value)}
-                />
-                <small>Optional if <code className="inline">HUBSPOT_PRIVATE_APP_TOKEN</code> is set on the server.</small>
-              </label>
+            {validationErrors.settings ? (
+              <div className="status-banner error">{validationErrors.settings}</div>
+            ) : null}
 
+            <div className="note">
+              Best design fidelity usually comes from inline styles plus a base email in clone mode. HubSpot may sanitize advanced CSS or head-level styling in standard create mode.
+            </div>
+
+            <div className="note">
+              This app now reads the HubSpot token from the server environment only. In Netlify, set <code className="inline">HUBSPOT_PRIVATE_APP_TOKEN</code> once and leave it out of the UI.
+            </div>
+
+            <div className="field-grid">
               <label className="field">
                 <span>Language</span>
                 <input
@@ -258,6 +264,7 @@ export function BulkCreatorApp() {
                   onChange={(event) => setDefaults((current) => ({ ...current, language: event.target.value }))}
                   placeholder="en"
                 />
+                {validationErrors.language ? <div className="status-banner error">{validationErrors.language}</div> : null}
               </label>
 
               <label className="field">
@@ -267,6 +274,7 @@ export function BulkCreatorApp() {
                   onChange={(event) => setDefaults((current) => ({ ...current, fromName: event.target.value }))}
                   placeholder="Marketing Team"
                 />
+                {validationErrors.fromName ? <div className="status-banner error">{validationErrors.fromName}</div> : null}
               </label>
 
               <label className="field">
@@ -276,6 +284,7 @@ export function BulkCreatorApp() {
                   onChange={(event) => setDefaults((current) => ({ ...current, replyToEmail: event.target.value }))}
                   placeholder="marketing@example.com"
                 />
+                {validationErrors.replyToEmail ? <div className="status-banner error">{validationErrors.replyToEmail}</div> : null}
               </label>
 
               <label className="field">
@@ -285,6 +294,7 @@ export function BulkCreatorApp() {
                   onChange={(event) => setDefaults((current) => ({ ...current, folderId: event.target.value }))}
                   placeholder="12345"
                 />
+                {validationErrors.folderId ? <div className="status-banner error">{validationErrors.folderId}</div> : null}
               </label>
 
               <label className="field">
@@ -294,8 +304,11 @@ export function BulkCreatorApp() {
                   onChange={(event) => setDefaults((current) => ({ ...current, campaignId: event.target.value }))}
                   placeholder="campaign-guid"
                 />
+                {validationErrors.campaignId ? <div className="status-banner error">{validationErrors.campaignId}</div> : null}
               </label>
             </div>
+
+            {validationErrors.privateToken ? <div className="status-banner error">{validationErrors.privateToken}</div> : null}
 
             <label className="field">
               <span>Base email clone mode</span>
@@ -305,6 +318,7 @@ export function BulkCreatorApp() {
                 placeholder="Optional existing HubSpot email ID"
               />
               <small>If provided, the app clones that draft/template first and then patches the cloned draft content.</small>
+              {validationErrors.baseEmailId ? <div className="status-banner error">{validationErrors.baseEmailId}</div> : null}
             </label>
           </div>
         </div>

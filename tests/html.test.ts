@@ -6,6 +6,11 @@ describe("extractBodyContent", () => {
     const html = "<html><head><title>T</title></head><body><section><p>Hello</p></section></body></html>";
     expect(extractBodyContent(html)).toBe("<section><p>Hello</p></section>");
   });
+
+  it("preserves head style blocks ahead of the extracted body", () => {
+    const html = "<html><head><style>.hero{color:red;}</style></head><body><section class=\"hero\"><p>Hello</p></section></body></html>";
+    expect(extractBodyContent(html)).toContain("<style>.hero{color:red;}</style>");
+  });
 });
 
 describe("generatePlainText", () => {

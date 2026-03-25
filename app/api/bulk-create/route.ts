@@ -10,14 +10,15 @@ import type {
   BulkCreateRequest,
   CsvMetadataRow,
   HtmlInspection,
-  UploadFileRecord
+  UploadFileRecord,
+  ValidationErrors
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function badRequest(message: string) {
-  return NextResponse.json({ message }, { status: 400 });
+function badRequest(message: string, validationErrors?: ValidationErrors) {
+  return NextResponse.json({ message, validationErrors }, { status: 400 });
 }
 
 function normalizeUploadLimit(runMode: string, files: UploadFileRecord[]) {
@@ -56,6 +57,32 @@ function validateRequestDefaults(request: BulkCreateRequest) {
   return warnings;
 }
 
+function buildValidationErrors(request: BulkCreateRequest, resolvedToken: string) {
+  const validationErrors: ValidationErrors = {};
+
+  if (request.executionMode === "create" && !resolvedToken) {
+    validationErrors.privateToken = "Provide a HubSpot private app token here or set HUBSPOT_PRIVATE_APP_TOKEN on the server.";
+    validationErrors.settings = "A HubSpot token is required for create mode.";
+  }
+
+  if (request.defaults.replyToEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(request.defaults.replyToEmail)) {
+    validationErrors.replyToEmail = "Enter a valid reply-to email address.";
+    validationErrors.settings = "One or more settings need attention before you can continue.";
+  }
+
+  if (request.defaults.folderId && !/^\d+$/.test(request.defaults.folderId)) {
+    validationErrors.folderId = "Folder ID should contain numbers only.";
+    validationErrors.settings = "One or more settings need attention before you can continue.";
+  }
+
+  if (!request.defaults.language.trim()) {
+    validationErrors.language = "Language cannot be blank.";
+    validationErrors.settings = "One or more settings need attention before you can continue.";
+  }
+
+  return validationErrors;
+}
+
 async function formFileToRecord(file: File): Promise<UploadFileRecord> {
   const content = (await file.text()).replace(/\0/g, "").replace(/\r\n/g, "\n");
 
@@ -71,7 +98,6 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const htmlFiles = formData.getAll("htmlFiles").filter((item): item is File => item instanceof File);
   const metadataCsv = formData.get("metadataCsv");
-  const privateToken = String(formData.get("privateToken") || "");
   const executionMode = String(formData.get("executionMode") || "dry-run");
   const runMode = String(formData.get("runMode") || "test-2");
 
@@ -115,9 +141,10 @@ export async function POST(request: Request) {
 
   let token = "";
   if (bulkRequest.executionMode === "create") {
-    token = resolveToken(privateToken);
-    if (!token) {
-      return badRequest("HubSpot private app token is required for create mode.");
+    token = resolveToken("");
+    const validationErrors = buildValidationErrors(bulkRequest, token);
+    if (Object.keys(validationErrors).length > 0) {
+      return badRequest("Fix the highlighted settings and try again.", validationErrors);
     }
   }
 
